@@ -10,15 +10,25 @@ import {
 } from "@chakra-ui/react";
 import { Wrapper } from "../components/Wrapper";
 import { InputField } from "../components/InputField";
+import { useMutation } from "urql";
+import { useRegisterMutation } from "../generated/graphql";
+import { toErrorMap } from "../utils/toErrorMap";
 
 interface registerProps {}
 
 export const Register: React.FC<registerProps> = ({}) => {
+  const [, register] = useRegisterMutation();
   return (
     <Wrapper variant="small">
       <Formik
-        onSubmit={(value) => {
-          console.log(value);
+        onSubmit={async (values, { setErrors }) => {
+          console.log(values);
+          const response = await register(values);
+          if (response.data?.register.errors) {
+            // the graphql errors like this
+            // [{filed: "username", message: "value empty"}]
+            setErrors(toErrorMap(response.data.register.errors));
+          }
         }}
         initialValues={{ username: "", password: "" }}
       >
