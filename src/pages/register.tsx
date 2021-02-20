@@ -13,10 +13,12 @@ import { InputField } from "../components/InputField";
 import { useMutation } from "urql";
 import { useRegisterMutation } from "../generated/graphql";
 import { toErrorMap } from "../utils/toErrorMap";
+import { useRouter } from "next/router";
 
 interface registerProps {}
 
 export const Register: React.FC<registerProps> = ({}) => {
+  const router = useRouter();
   const [, register] = useRegisterMutation();
   return (
     <Wrapper variant="small">
@@ -28,6 +30,10 @@ export const Register: React.FC<registerProps> = ({}) => {
             // the graphql errors like this
             // [{filed: "username", message: "value empty"}]
             setErrors(toErrorMap(response.data.register.errors));
+          } else if (response.data?.register.user) {
+            // TODO: try to move this else if block
+            // user log in successfully
+            router.push("/");
           }
         }}
         initialValues={{ username: "", password: "" }}
