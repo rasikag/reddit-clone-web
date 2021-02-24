@@ -7,7 +7,13 @@ import {
   QueryInput,
   query,
 } from "@urql/exchange-graphcache";
-import { LoginMutation, MeDocument, MeQuery, RegisterMutation } from "../generated/graphql";
+import {
+  LoginMutation,
+  LogoutMutation,
+  MeDocument,
+  MeQuery,
+  RegisterMutation,
+} from "../generated/graphql";
 
 function cacheUpdateQuery<Result, Query>(
   cache: Cache,
@@ -28,6 +34,18 @@ const client = createClient({
     cacheExchange({
       updates: {
         Mutation: {
+          logout: (_result, args, cache, info) => {
+            cacheUpdateQuery<LogoutMutation, MeQuery>(
+              cache,
+              { query: MeDocument },
+              _result,
+              () => {
+                return {
+                  me: null,
+                };
+              }
+            );
+          },
           login: (_result, args, cache, info) => {
             cacheUpdateQuery<LoginMutation, MeQuery>(
               cache,
@@ -38,7 +56,7 @@ const client = createClient({
                   return query;
                 } else {
                   return {
-                    me : result.login.user,
+                    me: result.login.user,
                   };
                 }
               }
@@ -54,7 +72,7 @@ const client = createClient({
                   return query;
                 } else {
                   return {
-                    me : result.register.user,
+                    me: result.register.user,
                   };
                 }
               }
