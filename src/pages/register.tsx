@@ -22,7 +22,7 @@ export const Register: React.FC<registerProps> = ({}) => {
       <Formik
         onSubmit={async (values, { setErrors }) => {
           console.log(values);
-          const response = await register(values);
+          const response = await register({options: values});
           if (response.data?.register.errors) {
             // the graphql errors like this
             // [{filed: "username", message: "value empty"}]
@@ -33,7 +33,7 @@ export const Register: React.FC<registerProps> = ({}) => {
             router.push("/");
           }
         }}
-        initialValues={{ username: "", password: "" }}
+        initialValues={{ username: "", password: "", email: "" }}
       >
         {({ isSubmitting }) => (
           <Form>
@@ -42,6 +42,13 @@ export const Register: React.FC<registerProps> = ({}) => {
               placeholder="username"
               label="Username"
             />
+            <Box mt={4}>
+              <InputField
+                name="email"
+                placeholder="email"
+                label="Email"
+              />
+            </Box>
             <Box mt={4}>
               <InputField
                 name="password"
