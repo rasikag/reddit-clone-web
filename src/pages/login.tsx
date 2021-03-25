@@ -35,7 +35,11 @@ const Login: React.FC<{}> = ({}) => {
           } else if (response.data?.login.user) {
             // TODO: try to move this else if block
             // user log in successfully
-            router.push("/");
+            if (typeof router.query.next === "string") {
+              router.push(router.query.next);
+            } else {
+              router.push("/");
+            }
           }
         }}
       >
