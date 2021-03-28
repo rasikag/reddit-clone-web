@@ -12,7 +12,7 @@ import { createUrqlClient } from "../../utils/createUrqlClient";
 import { withUrqlClient } from "next-urql";
 import NextLink from "next/link";
 
-const ChangePassword: NextPage<{ token: string }> = () => {
+const ChangePassword: NextPage = () => {
   // TODO: Add another filed to confirm password and add client
   // TODO: side validation and server side validation
   const router = useRouter();
