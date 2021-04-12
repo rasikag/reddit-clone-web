@@ -28,7 +28,6 @@ const errorExchange: Exchange = ({ forward }) => (ops$) => {
 };
 
 const cursorPagination = (): Resolver => {
-  
   return (_parent, fieldArgs, cache, info) => {
     const { parentKey: entityKey, fieldName } = info;
     const allFields = cache.inspectFields(entityKey);
@@ -40,16 +39,31 @@ const cursorPagination = (): Resolver => {
     }
 
     const fieldKey = `${fieldName}(${stringifyVariables(fieldArgs)})`;
-    const isItInTheCache = cache.resolve(entityKey, fieldKey);
+    const isItInTheCache = cache.resolve(
+      cache.resolve(entityKey, fieldKey) as string,
+      "posts"
+    );
     info.partial = !isItInTheCache;
     const results: string[] = [];
+    let hasMore = true;
     fieldInfos.forEach((fi) => {
-      const data = cache.resolve(entityKey, fi.fieldKey) as string[];
-      console.log(data)
+      const key = cache.resolve(entityKey, fi.fieldKey) as string;
+      // console.log(data)
+      const data = cache.resolve(key, "posts") as string[];
+      const _hasMore = cache.resolve(key, "hasMore");
+      if (!_hasMore) {
+        hasMore = _hasMore as boolean;
+      }
       results.push(...data);
+      // console.log(data, hasMore);
     });
 
-    return results;
+    // return results;
+    return {
+      __typename: "PaginatedPosts",
+      posts: results,
+      hasMore: true,
+    };
   };
 };
 
@@ -61,6 +75,9 @@ export const createUrqlClient = (ssrExchange: any) => ({
   exchanges: [
     dedupExchange,
     cacheExchange({
+      keys: {
+        PaginatedPosts: () => null,
+      },
       resolvers: {
         Query: {
           posts: cursorPagination(),
@@ -120,3 +137,10 @@ export const createUrqlClient = (ssrExchange: any) => ({
     fetchExchange,
   ],
 });
+
+/*
+urql-exchange-graphcache.mjs?8108:54 Invalid key: The GraphQL query at the field at `Query.posts({"limit":10})` has a selection set, but no key could be generated for the data at this field.
+You have to request `id` or `_id` fields for all selection sets or create a custom `keys` config for `PaginatedPosts`.
+Entities without keys will be embedded directly on the parent entity. If this is intentional, create a `keys` config for `PaginatedPosts` that always returns null.
+(Caused At: "Posts" query)
+*/
