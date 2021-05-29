@@ -7,6 +7,7 @@ import {
 } from "urql";
 import { pipe, tap } from "wonka";
 import {
+  DeletePostMutationVariables,
   LoginMutation,
   LogoutMutation,
   MeDocument,
@@ -17,17 +18,20 @@ import {
 import { cacheUpdateQuery } from "./cacheUpdateQuery";
 import Router from "next/router";
 import gql from "graphql-tag";
+import { isServer } from "./isServer";
 
-const errorExchange: Exchange = ({ forward }) => (ops$) => {
-  return pipe(
-    forward(ops$),
-    tap(({ error }) => {
-      if (error?.message.includes("not authenticated")) {
-        Router.replace("/login");
-      }
-    })
-  );
-};
+const errorExchange: Exchange =
+  ({ forward }) =>
+  (ops$) => {
+    return pipe(
+      forward(ops$),
+      tap(({ error }) => {
+        if (error?.message.includes("not authenticated")) {
+          Router.replace("/login");
+        }
+      })
+    );
+  };
 
 const cursorPagination = (): Resolver => {
   return (_parent, fieldArgs, cache, info) => {
@@ -68,117 +72,131 @@ const cursorPagination = (): Resolver => {
   };
 };
 
-export const createUrqlClient = (ssrExchange: any) => ({
-  url: "http://localhost:4001/graphql",
-  fetchOptions: {
-    credentials: "include" as const,
-  },
-  exchanges: [
-    dedupExchange,
-    cacheExchange({
-      keys: {
-        PaginatedPosts: () => null,
-      },
-      resolvers: {
-        Query: {
-          posts: cursorPagination(),
-        },
-      },
-      updates: {
-        Mutation: {
-          vote: (_result, args, cache, info) => {
-            const { postId, value } = args as VoteMutationVariables;
-            const data = cache.readFragment(
-              gql`
-                fragment _ on Post {
-                  id
-                  points
-                  voteStatus
-                }
-              `,
-              {
-                id: postId,
-              } as any
-            );
+export const createUrqlClient = (ssrExchange: any, ctx: any) => {
+  let cookie = "";
+  if (isServer()) {
+    cookie = ctx?.req?.headers?.cookie;
+  }
 
-            if (data) {
-              if (data.voteStatus === value) {
-                return;
-              }
-              const newPoints =
-                (data.points as number) + (!data.voteStatus ? 1 : 2) * value;
-              cache.writeFragment(
+  return {
+    url: "http://localhost:4001/graphql",
+    fetchOptions: {
+      credentials: "include" as const,
+      headers: cookie ? { cookie } : undefined,
+    },
+    exchanges: [
+      dedupExchange,
+      cacheExchange({
+        keys: {
+          PaginatedPosts: () => null,
+        },
+        resolvers: {
+          Query: {
+            posts: cursorPagination(),
+          },
+        },
+        updates: {
+          Mutation: {
+            deletePost: (_result, args, cache, info) => {
+              cache.invalidate({
+                __typename: "Post",
+                id: (args as DeletePostMutationVariables).id,
+              });
+            },
+            vote: (_result, args, cache, info) => {
+              const { postId, value } = args as VoteMutationVariables;
+              const data = cache.readFragment(
                 gql`
-                  fragment __ on Post {
+                  fragment _ on Post {
+                    id
                     points
                     voteStatus
                   }
                 `,
-                { id: postId, points: newPoints, voteStatus: value } as any
+                {
+                  id: postId,
+                } as any
               );
-            }
-          },
-          createPost: (_result, args, cache, info) => {
-            const allFields = cache.inspectFields("Query");
-            const fieldInfos = allFields.filter(
-              (info) => info.fieldName === "posts"
-            );
-            fieldInfos.forEach((fi) => {
-              cache.invalidate("Query", "posts", fi.arguments || {});
-            });
-          },
-          logout: (_result, args, cache, info) => {
-            cacheUpdateQuery<LogoutMutation, MeQuery>(
-              cache,
-              { query: MeDocument },
-              _result,
-              () => {
-                return {
-                  me: null,
-                };
+
+              if (data) {
+                if (data.voteStatus === value) {
+                  return;
+                }
+                const newPoints =
+                  (data.points as number) + (!data.voteStatus ? 1 : 2) * value;
+                cache.writeFragment(
+                  gql`
+                    fragment __ on Post {
+                      points
+                      voteStatus
+                    }
+                  `,
+                  { id: postId, points: newPoints, voteStatus: value } as any
+                );
               }
-            );
-          },
-          login: (_result, args, cache, info) => {
-            cacheUpdateQuery<LoginMutation, MeQuery>(
-              cache,
-              { query: MeDocument },
-              _result,
-              (result, query) => {
-                if (result.login.errors) {
-                  return query;
-                } else {
+            },
+            createPost: (_result, args, cache, info) => {
+              const allFields = cache.inspectFields("Query");
+              const fieldInfos = allFields.filter(
+                (info) => info.fieldName === "posts"
+              );
+              fieldInfos.forEach((fi) => {
+                cache.invalidate("Query", "posts", fi.arguments || {});
+              });
+            },
+            logout: (_result, args, cache, info) => {
+              cacheUpdateQuery<LogoutMutation, MeQuery>(
+                cache,
+                { query: MeDocument },
+                _result,
+                () => {
                   return {
-                    me: result.login.user,
+                    me: null,
                   };
                 }
-              }
-            );
-          },
-          register: (_result, args, cache, info) => {
-            cacheUpdateQuery<RegisterMutation, MeQuery>(
-              cache,
-              { query: MeDocument },
-              _result,
-              (result, query) => {
-                if (result.register.errors) {
-                  return query;
-                } else {
-                  return {
-                    me: result.register.user,
-                  };
+              );
+            },
+            login: (_result, args, cache, info) => {
+              cacheUpdateQuery<LoginMutation, MeQuery>(
+                cache,
+                { query: MeDocument },
+                _result,
+                (result, query) => {
+                  if (result.login.errors) {
+                    return query;
+                  } else {
+                    return {
+                      me: result.login.user,
+                    };
+                  }
                 }
-              }
-            );
+              );
+            },
+            register: (_result, args, cache, info) => {
+              cacheUpdateQuery<RegisterMutation, MeQuery>(
+                cache,
+                { query: MeDocument },
+                _result,
+                (result, query) => {
+                  if (result.register.errors) {
+                    return query;
+                  } else {
+                    return {
+                      me: result.register.user,
+                    };
+                  }
+                }
+              );
+            },
           },
         },
-      },
-    }),
-    errorExchange,
-    ssrExchange,
-    fetchExchange,
-  ],
-});
+      }),
+      errorExchange,
+      ssrExchange,
+      fetchExchange,
+    ],
+  };
+};
 
 /*
 urql-exchange-graphcache.mjs?8108:54 Invalid key: The GraphQL query at the field at `Query.posts({"limit":10})` has a selection set, but no key could be generated for the data at this field.
